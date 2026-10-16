@@ -3,20 +3,19 @@ package com.whatever.mods;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -51,8 +50,6 @@ public class WhateverMods {
 
     // ═══════════════════════════════════════════════════
     // 🎨 EDITABLE STRINGS
-    // In strings ko MT Manager mein smali se bhi edit kar sakta hai
-    // Search: "your_dialog_name", "join_us_channel_link", etc.
     // ═══════════════════════════════════════════════════
 
     public static final String your_dialog_name = "🔐 Gojo Satoru Mods";
@@ -62,7 +59,6 @@ public class WhateverMods {
     public static final String your_update_link = "https://t.me/yourchannel";
     public static final String your_api_url = "https://animezone-premiums.gt.tc/api/verify.php";
 
-    // Current app version — update.json ke latest_version se compare hoga
     public static final int CURRENT_VERSION = 1;
 
     // Logo image — base64 PNG (optional)
@@ -148,10 +144,11 @@ public class WhateverMods {
                             byte[] bytes = Base64.decode(LOGO_BASE64, Base64.DEFAULT);
                             Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                             if (bmp != null) {
-                                RoundedBitmapDrawable rbd = RoundedBitmapDrawableFactory.create(act.getResources(), bmp);
-                                rbd.setCircular(true);
-                                logo.setImageDrawable(rbd);
-                                hasImage = true;
+                                Bitmap circleBmp = getCircularBitmap(bmp);
+                                if (circleBmp != null) {
+                                    logo.setImageBitmap(circleBmp);
+                                    hasImage = true;
+                                }
                             }
                         } catch (Exception e) {
                             Log.e(TAG, "logo decode: " + e);
@@ -330,7 +327,7 @@ public class WhateverMods {
     }
 
     // ═══════════════════════════════════════════════════
-    // 🔍 VERIFY KEY — key + device_id dono bheje
+    // 🔍 VERIFY KEY
     // ═══════════════════════════════════════════════════
     private void verifyKey(final Activity act, final String key, final Callback cb) {
         executor.execute(new Runnable() {
@@ -490,6 +487,38 @@ public class WhateverMods {
             dlg.show();
         } catch (Exception e) {
             Log.e(TAG, "update dialog error", e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // 🎨 CIRCULAR BITMAP HELPER
+    // ═══════════════════════════════════════════════════
+    private Bitmap getCircularBitmap(Bitmap bitmap) {
+        try {
+            int size = Math.min(bitmap.getWidth(), bitmap.getHeight());
+            Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+
+            Canvas canvas = new Canvas(output);
+            final Paint paint = new Paint();
+            final Rect rect = new Rect(0, 0, size, size);
+            final RectF rectF = new RectF(rect);
+
+            paint.setAntiAlias(true);
+            canvas.drawARGB(0, 0, 0, 0);
+            paint.setColor(Color.WHITE);
+            canvas.drawOval(rectF, paint);
+
+            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+
+            int left = (bitmap.getWidth() - size) / 2;
+            int top = (bitmap.getHeight() - size) / 2;
+            Rect srcRect = new Rect(left, top, left + size, top + size);
+            canvas.drawBitmap(bitmap, srcRect, rect, paint);
+
+            return output;
+        } catch (Exception e) {
+            Log.e(TAG, "circle bitmap error: " + e);
+            return bitmap;
         }
     }
 
