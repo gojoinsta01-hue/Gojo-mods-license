@@ -6,20 +6,26 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RoundedBitmapDrawable;
+import android.graphics.drawable.RoundedBitmapDrawableFactory;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
+import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -39,19 +45,27 @@ public class WhateverMods {
 
     private static final String TAG = "WhateverMods";
 
-    // ==========================================
-    // SETTINGS - YAHAN EDIT KARO
-    // ==========================================
-    private static final String API_URL =
-        "https://wdrksxlolrdtihopwojn.supabase.co/functions/v1/license/api/verify/initiate_v2";
-    private static final String UPDATE_URL =
-        "https://wdrksxlolrdtihopwojn.supabase.co/functions/v1/license/api/app/register";
-    private static final String APP_NAME = "Whatever Mods";
-    private static final int CURRENT_VERSION = 1;
-    private static final String GET_KEY_URL    = "https://wa.me/923000000000";
-    private static final String JOIN_US_URL    = "https://whatsapp.com/channel/XXXXX";
-    private static final String UPDATE_LINK    = "https://t.me/yourchannel";
-    // ==========================================
+    // ═══════════════════════════════════════════════════
+    // 🎨 EDITABLE STRINGS
+    // In strings ko MT Manager mein smali se bhi edit kar sakta hai
+    // Search: "your_dialog_name", "join_us_channel_link", etc.
+    // ═══════════════════════════════════════════════════
+
+    public static final String your_dialog_name = "🔐 Gojo Satoru Mods";
+    public static final String join_us_channel_link = "https://whatsapp.com/channel/XXXXX";
+    public static final String get_key_link = "https://animezone-premiums.gt.tc/api/generate.php";
+    public static final String put_your_json_link = "https://animezone-premiums.gt.tc/update.json";
+    public static final String your_update_link = "https://t.me/yourchannel";
+    public static final String your_api_url = "https://animezone-premiums.gt.tc/api/verify.php";
+
+    // Current app version — update.json ke latest_version se compare hoga
+    public static final int CURRENT_VERSION = 1;
+
+    // Logo image — base64 PNG (optional)
+    // Khali chhod do abhi — purple circle fallback use hoga
+    public static final String LOGO_BASE64 = "";
+
+    // ═══════════════════════════════════════════════════
 
     private static final String PREF_NAME = "whatever_mods_prefs";
     private static final String PREF_KEY  = "saved_key";
@@ -71,6 +85,9 @@ public class WhateverMods {
         this.ui = new Handler(Looper.getMainLooper());
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🎯 MAIN ENTRY POINT
+    // ═══════════════════════════════════════════════════
     public static void inject(final Activity act) {
         if (act == null) return;
         final WhateverMods sdk = new WhateverMods(act);
@@ -85,7 +102,7 @@ public class WhateverMods {
                     sdk.checkUpdate(act);
                 }
                 @Override public void onFail(String msg) {
-                    Log.d(TAG, "Saved key invalid");
+                    Log.d(TAG, "Saved key invalid — showing dialog");
                     sdk.showLicenseDialog(act);
                 }
             });
@@ -94,6 +111,9 @@ public class WhateverMods {
         }
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🎨 LICENSE DIALOG
+    // ═══════════════════════════════════════════════════
     private void showLicenseDialog(final Activity act) {
         ui.post(new Runnable() {
             @Override public void run() {
@@ -101,7 +121,8 @@ public class WhateverMods {
                     ScrollView scroll = new ScrollView(act);
                     LinearLayout root = new LinearLayout(act);
                     root.setOrientation(LinearLayout.VERTICAL);
-                    root.setPadding(dp(22), dp(24), dp(22), dp(24));
+                    root.setPadding(dp(22), dp(28), dp(22), dp(24));
+                    root.setGravity(Gravity.CENTER_HORIZONTAL);
 
                     GradientDrawable bg = new GradientDrawable();
                     bg.setColor(Color.parseColor("#0A0A14"));
@@ -110,34 +131,62 @@ public class WhateverMods {
                     root.setBackground(bg);
                     scroll.addView(root);
 
+                    // ─── CIRCLE LOGO ───
+                    ImageView logo = new ImageView(act);
+                    int size = dp(80);
+                    LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(size, size);
+                    logoParams.bottomMargin = dp(14);
+                    logo.setLayoutParams(logoParams);
+
+                    boolean hasImage = false;
+                    if (LOGO_BASE64 != null && !LOGO_BASE64.isEmpty()) {
+                        try {
+                            byte[] bytes = Base64.decode(LOGO_BASE64, Base64.DEFAULT);
+                            Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                            if (bmp != null) {
+                                RoundedBitmapDrawable rbd = RoundedBitmapDrawableFactory.create(act.getResources(), bmp);
+                                rbd.setCircular(true);
+                                logo.setImageDrawable(rbd);
+                                hasImage = true;
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "logo decode: " + e);
+                        }
+                    }
+
+                    if (!hasImage) {
+                        GradientDrawable circle = new GradientDrawable();
+                        circle.setShape(GradientDrawable.OVAL);
+                        circle.setColor(Color.parseColor("#8B5CF6"));
+                        logo.setBackground(circle);
+                    }
+                    root.addView(logo);
+
+                    // ─── TITLE ───
                     TextView title = new TextView(act);
-                    title.setText("🔐 " + APP_NAME);
+                    title.setText(your_dialog_name);
                     title.setTextColor(Color.parseColor("#C4B5FD"));
-                    title.setTextSize(22);
+                    title.setTextSize(20);
                     title.setTypeface(null, Typeface.BOLD);
                     title.setGravity(Gravity.CENTER);
                     root.addView(title);
 
+                    // ─── SUBTITLE ───
                     TextView sub = new TextView(act);
                     sub.setText("Premium Unlocked Version");
                     sub.setTextColor(Color.parseColor("#9CA3AF"));
                     sub.setTextSize(12);
                     sub.setGravity(Gravity.CENTER);
-                    sub.setPadding(0, dp(6), 0, dp(22));
+                    sub.setPadding(0, dp(4), 0, dp(20));
                     root.addView(sub);
 
-                    TextView lbl = new TextView(act);
-                    lbl.setText("Enter License Key");
-                    lbl.setTextColor(Color.parseColor("#E5E7EB"));
-                    lbl.setTextSize(13);
-                    lbl.setPadding(0, 0, 0, dp(8));
-                    root.addView(lbl);
-
+                    // ─── INPUT FIELD ───
                     final EditText input = new EditText(act);
-                    input.setHint("XXXX-XXXX-XXXX");
+                    input.setHint("GOJO-XXXXXXXX");
                     input.setHintTextColor(Color.parseColor("#6B7280"));
                     input.setTextColor(Color.WHITE);
                     input.setTextSize(15);
+                    input.setGravity(Gravity.CENTER);
                     input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
                     input.setPadding(dp(14), dp(14), dp(14), dp(14));
                     GradientDrawable inputBg = new GradientDrawable();
@@ -145,10 +194,32 @@ public class WhateverMods {
                     inputBg.setCornerRadius(dp(10));
                     inputBg.setStroke(dp(1), Color.parseColor("#4C1D95"));
                     input.setBackground(inputBg);
+                    LinearLayout.LayoutParams inp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    inp.bottomMargin = dp(12);
+                    input.setLayoutParams(inp);
                     root.addView(input);
 
+                    // ─── GET KEY BUTTON (PRIMARY — green) ───
+                    final Button getKey = new Button(act);
+                    getKey.setText("🎁  GET KEY");
+                    getKey.setTextColor(Color.WHITE);
+                    getKey.setTextSize(15);
+                    getKey.setTypeface(null, Typeface.BOLD);
+                    GradientDrawable gkBg = new GradientDrawable(
+                            GradientDrawable.Orientation.LEFT_RIGHT,
+                            new int[]{Color.parseColor("#10B981"), Color.parseColor("#059669")});
+                    gkBg.setCornerRadius(dp(10));
+                    getKey.setBackground(gkBg);
+                    LinearLayout.LayoutParams gkp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+                    gkp.bottomMargin = dp(10);
+                    getKey.setLayoutParams(gkp);
+                    root.addView(getKey);
+
+                    // ─── UNLOCK BUTTON (PRIMARY — purple) ───
                     final Button login = new Button(act);
-                    login.setText("UNLOCK");
+                    login.setText("🔓  UNLOCK");
                     login.setTextColor(Color.WHITE);
                     login.setTextSize(15);
                     login.setTypeface(null, Typeface.BOLD);
@@ -158,26 +229,12 @@ public class WhateverMods {
                     btnBg.setCornerRadius(dp(10));
                     login.setBackground(btnBg);
                     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
-                    lp.topMargin = dp(16);
+                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+                    lp.bottomMargin = dp(10);
                     login.setLayoutParams(lp);
                     root.addView(login);
 
-                    Button getKey = new Button(act);
-                    getKey.setText("🎁  GET KEY");
-                    getKey.setTextColor(Color.parseColor("#A78BFA"));
-                    getKey.setTextSize(14);
-                    GradientDrawable gk = new GradientDrawable();
-                    gk.setColor(Color.parseColor("#1A1A2E"));
-                    gk.setCornerRadius(dp(10));
-                    gk.setStroke(dp(1), Color.parseColor("#7C3AED"));
-                    getKey.setBackground(gk);
-                    LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
-                    lp2.topMargin = dp(10);
-                    getKey.setLayoutParams(lp2);
-                    root.addView(getKey);
-
+                    // ─── JOIN US BUTTON ───
                     Button join = new Button(act);
                     join.setText("💬  JOIN US");
                     join.setTextColor(Color.parseColor("#A78BFA"));
@@ -189,12 +246,12 @@ public class WhateverMods {
                     join.setBackground(jn);
                     LinearLayout.LayoutParams lp3 = new LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
-                    lp3.topMargin = dp(8);
                     join.setLayoutParams(lp3);
                     root.addView(join);
 
+                    // ─── FOOTER ───
                     TextView footer = new TextView(act);
-                    footer.setText("Powered by " + APP_NAME);
+                    footer.setText("Powered by " + your_dialog_name);
                     footer.setTextColor(Color.parseColor("#4B5563"));
                     footer.setTextSize(10);
                     footer.setGravity(Gravity.CENTER);
@@ -206,9 +263,10 @@ public class WhateverMods {
                             .setCancelable(false)
                             .create();
 
+                    // ═══ UNLOCK CLICK ═══
                     login.setOnClickListener(new View.OnClickListener() {
                         @Override public void onClick(View v) {
-                            String key = input.getText().toString().trim();
+                            final String key = input.getText().toString().trim();
                             if (key.isEmpty()) { toast("Enter your key"); return; }
                             login.setEnabled(false);
                             login.setText("Verifying...");
@@ -229,7 +287,7 @@ public class WhateverMods {
                                     ui.post(new Runnable() {
                                         @Override public void run() {
                                             login.setEnabled(true);
-                                            login.setText("UNLOCK");
+                                            login.setText("🔓  UNLOCK");
                                             toast("✗ " + msg);
                                         }
                                     });
@@ -238,12 +296,25 @@ public class WhateverMods {
                         }
                     });
 
+                    // ═══ GET KEY CLICK — device_id background mein ═══
                     getKey.setOnClickListener(new View.OnClickListener() {
-                        @Override public void onClick(View v) { openUrl(act, GET_KEY_URL); }
+                        @Override public void onClick(View v) {
+                            String devId = deviceId(act);
+                            String url = get_key_link;
+                            if (url.contains("?")) {
+                                url += "&device_id=" + Uri.encode(devId);
+                            } else {
+                                url += "?device_id=" + Uri.encode(devId);
+                            }
+                            openUrl(act, url);
+                        }
                     });
 
+                    // ═══ JOIN US CLICK ═══
                     join.setOnClickListener(new View.OnClickListener() {
-                        @Override public void onClick(View v) { openUrl(act, JOIN_US_URL); }
+                        @Override public void onClick(View v) {
+                            openUrl(act, join_us_channel_link);
+                        }
                     });
 
                     dlg.show();
@@ -254,12 +325,15 @@ public class WhateverMods {
         });
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🔍 VERIFY KEY — key + device_id dono bheje
+    // ═══════════════════════════════════════════════════
     private void verifyKey(final Activity act, final String key, final Callback cb) {
         executor.execute(new Runnable() {
             @Override public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL(API_URL);
+                    URL url = new URL(your_api_url);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/json");
@@ -269,10 +343,7 @@ public class WhateverMods {
 
                     JSONObject body = new JSONObject();
                     body.put("key", key);
-                    body.put("deviceId", deviceId(act));
-                    body.put("appToken", "whatever_client");
-                    body.put("versionCode", CURRENT_VERSION);
-                    body.put("versionName", "1.0");
+                    body.put("device_id", deviceId(act));
 
                     OutputStream os = conn.getOutputStream();
                     os.write(body.toString().getBytes("UTF-8"));
@@ -303,16 +374,19 @@ public class WhateverMods {
         });
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🔄 UPDATE CHECK
+    // ═══════════════════════════════════════════════════
     private void checkUpdate(final Activity act) {
         executor.execute(new Runnable() {
             @Override public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL(UPDATE_URL);
+                    URL url = new URL(put_your_json_link);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(10000);
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
 
                     int code = conn.getResponseCode();
                     if (code != 200) return;
@@ -324,14 +398,16 @@ public class WhateverMods {
                     br.close();
 
                     JSONObject resp = new JSONObject(sb.toString());
-                    int latestVer = resp.optInt("latest_version", CURRENT_VERSION);
-                    final String latestName = resp.optString("latest_version_name", "");
-                    final String updateUrl = resp.optString("update_link", UPDATE_LINK);
+                    boolean updateAvailable = resp.optBoolean("update_available", false);
+                    int latestVersion = resp.optInt("latest_version", CURRENT_VERSION);
+                    final String updateLink = resp.optString("update_link", your_update_link);
+                    final String updateMsg = resp.optString("update_message",
+                            "A new version is available. Please update to continue.");
 
-                    if (latestVer > CURRENT_VERSION) {
+                    if (updateAvailable && latestVersion > CURRENT_VERSION) {
                         ui.post(new Runnable() {
                             @Override public void run() {
-                                showUpdateDialog(act, latestName, updateUrl);
+                                showUpdateDialog(act, updateMsg, updateLink);
                             }
                         });
                     }
@@ -344,11 +420,12 @@ public class WhateverMods {
         });
     }
 
-    private void showUpdateDialog(final Activity act, String version, final String url) {
+    private void showUpdateDialog(final Activity act, String msg, final String url) {
         try {
             LinearLayout root = new LinearLayout(act);
             root.setOrientation(LinearLayout.VERTICAL);
             root.setPadding(dp(22), dp(24), dp(22), dp(24));
+            root.setGravity(Gravity.CENTER_HORIZONTAL);
 
             GradientDrawable bg = new GradientDrawable();
             bg.setColor(Color.parseColor("#0A0A14"));
@@ -365,7 +442,7 @@ public class WhateverMods {
             root.addView(t);
 
             TextView m = new TextView(act);
-            m.setText("New version " + version + " is available.\nPlease update to continue.");
+            m.setText(msg);
             m.setTextColor(Color.parseColor("#9CA3AF"));
             m.setTextSize(13);
             m.setGravity(Gravity.CENTER);
@@ -373,7 +450,7 @@ public class WhateverMods {
             root.addView(m);
 
             Button update = new Button(act);
-            update.setText("UPDATE NOW");
+            update.setText("⬇️  UPDATE NOW");
             update.setTextColor(Color.WHITE);
             update.setTypeface(null, Typeface.BOLD);
             GradientDrawable ub = new GradientDrawable(
@@ -412,6 +489,9 @@ public class WhateverMods {
         }
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🛠️ HELPERS
+    // ═══════════════════════════════════════════════════
     private void openUrl(Activity act, String url) {
         try {
             act.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
