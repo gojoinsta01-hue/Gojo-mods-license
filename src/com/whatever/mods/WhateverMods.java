@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -21,7 +22,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
-import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -37,6 +37,7 @@ import android.widget.Toast;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -46,28 +47,38 @@ import java.util.concurrent.Executors;
 
 public class WhateverMods {
 
-    private static final String TAG = "WhateverMods";
+    private static final String TAG = "GojoMods";
 
     // ═══════════════════════════════════════════════════
-    // 🎨 EDITABLE STRINGS
+    // 🎨 EDITABLE STRINGS — smali mein search karke badlo
     // ═══════════════════════════════════════════════════
 
     public static final String your_dialog_name = "🔐 Gojo Satoru Mods";
-    public static final String join_us_channel_link = "https://whatsapp.com/channel/XXXXX";
+
+    // 💬 JOIN US channel
+    public static final String join_us_channel_link = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
+
+    // 🎁 GET KEY — APK khud ?device_id= lagayega
     public static final String get_key_link = "https://animezone-premiums.gt.tc/api/generate.php";
+
+    // 🔄 UPDATE JSON
     public static final String put_your_json_link = "https://animezone-premiums.gt.tc/update.json";
-    public static final String your_update_link = "https://t.me/yourchannel";
+
+    // ⬇️ UPDATE button link
+    public static final String your_update_link = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
+
+    // 🔑 VERIFY endpoint
     public static final String your_api_url = "https://animezone-premiums.gt.tc/api/verify.php";
 
-    public static final int CURRENT_VERSION = 1;
+    // 🏷️ Asset filename for logo (APK ke assets/ folder mein rakhna)
+    public static final String LOGO_ASSET_NAME = "logo.png";
 
-    // Logo image — base64 PNG (optional)
-    // Khali chhod do abhi — purple circle fallback use hoga
-    public static final String LOGO_BASE64 = "";
+    // 📱 App version
+    public static final int CURRENT_VERSION = 1;
 
     // ═══════════════════════════════════════════════════
 
-    private static final String PREF_NAME = "whatever_mods_prefs";
+    private static final String PREF_NAME = "gojo_mods_prefs";
     private static final String PREF_KEY  = "saved_key";
 
     private final Context ctx;
@@ -85,9 +96,6 @@ public class WhateverMods {
         this.ui = new Handler(Looper.getMainLooper());
     }
 
-    // ═══════════════════════════════════════════════════
-    // 🎯 MAIN ENTRY POINT
-    // ═══════════════════════════════════════════════════
     public static void inject(final Activity act) {
         if (act == null) return;
         final WhateverMods sdk = new WhateverMods(act);
@@ -131,7 +139,7 @@ public class WhateverMods {
                     root.setBackground(bg);
                     scroll.addView(root);
 
-                    // ─── CIRCLE LOGO ───
+                    // ─── CIRCLE LOGO (from assets) ───
                     ImageView logo = new ImageView(act);
                     int size = dp(80);
                     LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(size, size);
@@ -139,20 +147,20 @@ public class WhateverMods {
                     logo.setLayoutParams(logoParams);
 
                     boolean hasImage = false;
-                    if (LOGO_BASE64 != null && !LOGO_BASE64.isEmpty()) {
-                        try {
-                            byte[] bytes = Base64.decode(LOGO_BASE64, Base64.DEFAULT);
-                            Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                            if (bmp != null) {
-                                Bitmap circleBmp = getCircularBitmap(bmp);
-                                if (circleBmp != null) {
-                                    logo.setImageBitmap(circleBmp);
-                                    hasImage = true;
-                                }
+                    try {
+                        AssetManager am = act.getAssets();
+                        InputStream is = am.open(LOGO_ASSET_NAME);
+                        Bitmap bmp = BitmapFactory.decodeStream(is);
+                        is.close();
+                        if (bmp != null) {
+                            Bitmap circleBmp = getCircularBitmap(bmp);
+                            if (circleBmp != null) {
+                                logo.setImageBitmap(circleBmp);
+                                hasImage = true;
                             }
-                        } catch (Exception e) {
-                            Log.e(TAG, "logo decode: " + e);
                         }
+                    } catch (Exception e) {
+                        Log.d(TAG, "logo asset not found, using fallback: " + e.getMessage());
                     }
 
                     if (!hasImage) {
@@ -201,8 +209,25 @@ public class WhateverMods {
                     input.setLayoutParams(inp);
                     root.addView(input);
 
-                    // ─── GET KEY BUTTON (PRIMARY — green) ───
-                    final Button getKey = new Button(act);
+                    // ─── VERIFY BUTTON (purple) ───
+                    final Button login = new Button(act);
+                    login.setText("🔓  VERIFY");
+                    login.setTextColor(Color.WHITE);
+                    login.setTextSize(15);
+                    login.setTypeface(null, Typeface.BOLD);
+                    GradientDrawable btnBg = new GradientDrawable(
+                            GradientDrawable.Orientation.LEFT_RIGHT,
+                            new int[]{Color.parseColor("#8B5CF6"), Color.parseColor("#6D28D9")});
+                    btnBg.setCornerRadius(dp(10));
+                    login.setBackground(btnBg);
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+                    lp.bottomMargin = dp(10);
+                    login.setLayoutParams(lp);
+                    root.addView(login);
+
+                    // ─── GET KEY BUTTON (green) ───
+                    Button getKey = new Button(act);
                     getKey.setText("🎁  GET KEY");
                     getKey.setTextColor(Color.WHITE);
                     getKey.setTextSize(15);
@@ -218,24 +243,7 @@ public class WhateverMods {
                     getKey.setLayoutParams(gkp);
                     root.addView(getKey);
 
-                    // ─── UNLOCK BUTTON (PRIMARY — purple) ───
-                    final Button login = new Button(act);
-                    login.setText("🔓  UNLOCK");
-                    login.setTextColor(Color.WHITE);
-                    login.setTextSize(15);
-                    login.setTypeface(null, Typeface.BOLD);
-                    GradientDrawable btnBg = new GradientDrawable(
-                            GradientDrawable.Orientation.LEFT_RIGHT,
-                            new int[]{Color.parseColor("#8B5CF6"), Color.parseColor("#6D28D9")});
-                    btnBg.setCornerRadius(dp(10));
-                    login.setBackground(btnBg);
-                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
-                    lp.bottomMargin = dp(10);
-                    login.setLayoutParams(lp);
-                    root.addView(login);
-
-                    // ─── JOIN US BUTTON ───
+                    // ─── JOIN US BUTTON (outline) ───
                     Button join = new Button(act);
                     join.setText("💬  JOIN US");
                     join.setTextColor(Color.parseColor("#A78BFA"));
@@ -264,7 +272,7 @@ public class WhateverMods {
                             .setCancelable(false)
                             .create();
 
-                    // ═══ UNLOCK CLICK ═══
+                    // ═══ VERIFY CLICK ═══
                     login.setOnClickListener(new View.OnClickListener() {
                         @Override public void onClick(View v) {
                             final String key = input.getText().toString().trim();
@@ -288,7 +296,7 @@ public class WhateverMods {
                                     ui.post(new Runnable() {
                                         @Override public void run() {
                                             login.setEnabled(true);
-                                            login.setText("🔓  UNLOCK");
+                                            login.setText("🔓  VERIFY");
                                             toast("✗ " + msg);
                                         }
                                     });
@@ -297,7 +305,7 @@ public class WhateverMods {
                         }
                     });
 
-                    // ═══ GET KEY CLICK — device_id background mein ═══
+                    // ═══ GET KEY CLICK — device_id auto append ═══
                     getKey.setOnClickListener(new View.OnClickListener() {
                         @Override public void onClick(View v) {
                             String devId = deviceId(act);
@@ -338,6 +346,8 @@ public class WhateverMods {
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36");
+                    conn.setRequestProperty("Accept", "application/json");
                     conn.setDoOutput(true);
                     conn.setConnectTimeout(15000);
                     conn.setReadTimeout(15000);
@@ -386,6 +396,7 @@ public class WhateverMods {
                     URL url = new URL(put_your_json_link);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36");
                     conn.setConnectTimeout(8000);
                     conn.setReadTimeout(8000);
 
@@ -491,7 +502,7 @@ public class WhateverMods {
     }
 
     // ═══════════════════════════════════════════════════
-    // 🎨 CIRCULAR BITMAP HELPER
+    // 🎨 CIRCULAR BITMAP
     // ═══════════════════════════════════════════════════
     private Bitmap getCircularBitmap(Bitmap bitmap) {
         try {
