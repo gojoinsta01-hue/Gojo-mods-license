@@ -3,7 +3,6 @@ package com.whatever.mods;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -28,7 +27,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -50,26 +48,23 @@ import java.util.concurrent.Executors;
 public class WhateverMods {
 
     // ==========================================================
-    // EDITABLE STRINGS — safe to patch in MT Manager smali editor
+    // EDITABLE VIA GETTERS — smali-safe, no compiler inlining
     // ==========================================================
-    public static final String your_dialog_name     = "🔐 Gojo Satoru Mods";
-    public static final String join_us_channel_link = "https://whatsapp.com/channel/XXXXX";
-    public static final String get_key_link         = "https://example.com/api/generate.php";
-    public static final String put_your_json_link   = "https://example.com/update.json";
-    public static final String your_update_link     = "https://example.com/update";
-    public static final String your_api_url         = "https://example.com/api/verify.php";
-    public static final String LOGO_ASSET_NAME      = "logo.png";
-    public static final int    CURRENT_VERSION      = 1;
+    public static String getDialogName() { return "🔐 Gojo Satoru Mods"; }
+    public static String getJoinLink()   { return "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E"; }
+    public static String getGetKeyLink() { return "https://animezone-premiums.gt.tc/getkey.php"; }
+    public static String getUpdateJson() { return "https://animezone-premiums.gt.tc/update.json"; }
+    public static String getUpdateLink() { return "https://animezone-premiums.gt.tc/update"; }
+    public static String getApiUrl()     { return "https://animezone-premiums.gt.tc/verify.php"; }
 
-    // ==========================================================
-    // INTERNAL CONSTANTS
-    // ==========================================================
+    public static final String LOGO_ASSET_NAME = "logo.png";
+    public static final int    CURRENT_VERSION = 1;
+
     private static final String TAG        = "GojoMods";
     private static final String PREFS_NAME = "gojo_mods_prefs";
     private static final String KEY_SAVED  = "saved_key";
     private static final String UA         = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36";
 
-    // Colors
     private static final int C_BG        = 0xFF0A0A14;
     private static final int C_BORDER    = 0xFF8B5CF6;
     private static final int C_TITLE     = 0xFFC4B5FD;
@@ -91,16 +86,12 @@ public class WhateverMods {
         void onFail(String msg);
     }
 
-    // ==========================================================
-    // ENTRY POINT
-    // ==========================================================
     public static void inject(final Activity act) {
         if (act == null) return;
         try {
             final SharedPreferences prefs = act.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             final String saved = prefs.getString(KEY_SAVED, null);
             if (saved != null && saved.length() > 0) {
-                // Silent verify
                 POOL.execute(new Runnable() {
                     @Override public void run() {
                         final String deviceId = getDeviceId(act);
@@ -128,9 +119,6 @@ public class WhateverMods {
         }
     }
 
-    // ==========================================================
-    // DEVICE ID
-    // ==========================================================
     private static String getDeviceId(Context ctx) {
         try {
             String id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -142,20 +130,22 @@ public class WhateverMods {
     }
 
     // ==========================================================
-    // NETWORK — VERIFY KEY
+    // NETWORK — VERIFY KEY (calls animezone-premiums.gt.tc)
     // ==========================================================
     private static String verifyKey(String key, String deviceId) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(your_api_url);
+            URL url = new URL(getApiUrl());
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(15000);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(20000);
             conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setUseCaches(false);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setRequestProperty("User-Agent", UA);
             conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", UA);
 
             JSONObject body = new JSONObject();
             body.put("key", key);
@@ -167,6 +157,8 @@ public class WhateverMods {
             os.close();
 
             int code = conn.getResponseCode();
+            Log.d(TAG, "verify http code = " + code);
+
             BufferedReader br;
             if (code >= 200 && code < 300) {
                 br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
@@ -183,8 +175,7 @@ public class WhateverMods {
 
             try {
                 JSONObject json = new JSONObject(resp);
-                String status = json.optString("status", "INVALID");
-                return status;
+                return json.optString("status", "INVALID");
             } catch (Throwable t) {
                 return "INVALID";
             }
@@ -197,15 +188,16 @@ public class WhateverMods {
     }
 
     private static String getVerifyMessage(String key, String deviceId) {
-        // Re-fetch to grab message. Reuses same contract. Called on fail path.
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(your_api_url);
+            URL url = new URL(getApiUrl());
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(15000);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(20000);
             conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setUseCaches(false);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setRequestProperty("User-Agent", UA);
 
@@ -234,18 +226,19 @@ public class WhateverMods {
     }
 
     // ==========================================================
-    // NETWORK — UPDATE CHECK
+    // NETWORK — UPDATE CHECK (reads animezone-premiums.gt.tc/update.json)
     // ==========================================================
     private static void checkUpdate(final Activity act) {
         POOL.execute(new Runnable() {
             @Override public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL(put_your_json_link);
+                    URL url = new URL(getUpdateJson());
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(10000);
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(15000);
+                    conn.setUseCaches(false);
                     conn.setRequestProperty("User-Agent", UA);
 
                     BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
@@ -257,7 +250,7 @@ public class WhateverMods {
                     JSONObject json = new JSONObject(sb.toString());
                     boolean avail = json.optBoolean("update_available", false);
                     int latest    = json.optInt("latest_version", CURRENT_VERSION);
-                    final String link = json.optString("update_link", your_update_link);
+                    final String link = json.optString("update_link", getUpdateLink());
                     final String msg  = json.optString("update_message", "New version available");
 
                     if (avail && latest > CURRENT_VERSION) {
@@ -276,9 +269,6 @@ public class WhateverMods {
         });
     }
 
-    // ==========================================================
-    // UI HELPERS
-    // ==========================================================
     private static int dp(Context c, int v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics());
     }
@@ -350,9 +340,6 @@ public class WhateverMods {
         return lp;
     }
 
-    // ==========================================================
-    // MAIN DIALOG
-    // ==========================================================
     private static void showDialog(final Activity act, final SharedPreferences prefs) {
         try {
             final int radius  = dp(act, 18);
@@ -360,17 +347,14 @@ public class WhateverMods {
             final int stroke  = dp(act, 2);
             final int btnH    = dp(act, 48);
 
-            // ROOT (outer padding so card doesn't touch screen edges)
             FrameLayout root = new FrameLayout(act);
             root.setPadding(dp(act, 16), dp(act, 16), dp(act, 16), dp(act, 16));
 
-            // CARD
             LinearLayout card = new LinearLayout(act);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(pad, pad, pad, pad);
             card.setBackground(roundedGradient(C_BG, C_BG, radius, C_BORDER, stroke));
 
-            // 1. LOGO
             Bitmap logo = loadLogo(act);
             int logoSize = dp(act, 88);
             if (logo != null) {
@@ -390,9 +374,8 @@ public class WhateverMods {
                 card.addView(circle);
             }
 
-            // 2. TITLE
             TextView title = new TextView(act);
-            title.setText(your_dialog_name);
+            title.setText(getDialogName());
             title.setTextColor(C_TITLE);
             title.setTextSize(20f);
             title.setGravity(Gravity.CENTER);
@@ -400,7 +383,6 @@ public class WhateverMods {
             title.setLayoutParams(lpMatch(dp(act, 4)));
             card.addView(title);
 
-            // 3. SUBTITLE
             TextView sub = new TextView(act);
             sub.setText("Premium Unlocked Version");
             sub.setTextColor(C_SUBTITLE);
@@ -409,7 +391,6 @@ public class WhateverMods {
             sub.setLayoutParams(lpMatch(dp(act, 18)));
             card.addView(sub);
 
-            // 4. INPUT
             final EditText input = new EditText(act);
             input.setHint("GOJO-XXXXXXXX");
             input.setHintTextColor(C_HINT);
@@ -424,7 +405,6 @@ public class WhateverMods {
             input.setLayoutParams(inLp);
             card.addView(input);
 
-            // 5. VERIFY BUTTON
             final TextView verify = new TextView(act);
             verify.setText("VERIFY");
             verify.setTextColor(C_WHITE);
@@ -437,7 +417,6 @@ public class WhateverMods {
             verify.setLayoutParams(vLp);
             card.addView(verify);
 
-            // 6. GET KEY BUTTON
             TextView getKey = new TextView(act);
             getKey.setText("GET KEY");
             getKey.setTextColor(C_WHITE);
@@ -450,7 +429,6 @@ public class WhateverMods {
             getKey.setLayoutParams(gLp);
             card.addView(getKey);
 
-            // 7. JOIN US BUTTON
             TextView join = new TextView(act);
             join.setText("JOIN US");
             join.setTextColor(C_TITLE);
@@ -463,15 +441,13 @@ public class WhateverMods {
             join.setLayoutParams(jLp);
             card.addView(join);
 
-            // 8. FOOTER
             TextView footer = new TextView(act);
-            footer.setText("Powered by " + your_dialog_name);
+            footer.setText("Powered by " + getDialogName());
             footer.setTextColor(C_SUBTITLE);
             footer.setTextSize(11f);
             footer.setGravity(Gravity.CENTER);
             card.addView(footer);
 
-            // Wrap card in scroll for tiny screens
             ScrollView sv = new ScrollView(act);
             sv.addView(card);
             root.addView(sv);
@@ -487,7 +463,6 @@ public class WhateverMods {
                 w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
             }
 
-            // VERIFY CLICK
             verify.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     final String key = input.getText().toString().trim().toUpperCase();
@@ -529,12 +504,11 @@ public class WhateverMods {
                 }
             });
 
-            // GET KEY CLICK
             getKey.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     try {
                         String deviceId = getDeviceId(act);
-                        String url = get_key_link;
+                        String url = getGetKeyLink();
                         if (url.contains("?")) url += "&device_id=" + deviceId;
                         else                  url += "?device_id=" + deviceId;
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -547,11 +521,10 @@ public class WhateverMods {
                 }
             });
 
-            // JOIN US CLICK
             join.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     try {
-                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(join_us_channel_link));
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(getJoinLink()));
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         act.startActivity(i);
                     } catch (Throwable t) {
@@ -567,9 +540,6 @@ public class WhateverMods {
         }
     }
 
-    // ==========================================================
-    // UPDATE DIALOG
-    // ==========================================================
     private static void showUpdateDialog(final Activity act, String message, final String updateLink) {
         try {
             LinearLayout card = new LinearLayout(act);
