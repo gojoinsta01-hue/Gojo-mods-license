@@ -3,9 +3,9 @@ package com.whatever.mods;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -15,7 +15,6 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Handler;
@@ -23,11 +22,15 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -37,7 +40,6 @@ import android.widget.Toast;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -47,516 +49,610 @@ import java.util.concurrent.Executors;
 
 public class WhateverMods {
 
-    private static final String TAG = "GojoMods";
+    // ==========================================================
+    // EDITABLE STRINGS — safe to patch in MT Manager smali editor
+    // ==========================================================
+    public static final String your_dialog_name     = "🔐 Gojo Satoru Mods";
+    public static final String join_us_channel_link = "https://whatsapp.com/channel/XXXXX";
+    public static final String get_key_link         = "https://example.com/api/generate.php";
+    public static final String put_your_json_link   = "https://example.com/update.json";
+    public static final String your_update_link     = "https://example.com/update";
+    public static final String your_api_url         = "https://example.com/api/verify.php";
+    public static final String LOGO_ASSET_NAME      = "logo.png";
+    public static final int    CURRENT_VERSION      = 1;
 
-    // ═══════════════════════════════════════════════════
-    // 🎨 EDITABLE STRINGS — smali mein search karke badlo
-    // ═══════════════════════════════════════════════════
+    // ==========================================================
+    // INTERNAL CONSTANTS
+    // ==========================================================
+    private static final String TAG        = "GojoMods";
+    private static final String PREFS_NAME = "gojo_mods_prefs";
+    private static final String KEY_SAVED  = "saved_key";
+    private static final String UA         = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36";
 
-    public static final String your_dialog_name = "🔐 Gojo Satoru Mods";
+    // Colors
+    private static final int C_BG        = 0xFF0A0A14;
+    private static final int C_BORDER    = 0xFF8B5CF6;
+    private static final int C_TITLE     = 0xFFC4B5FD;
+    private static final int C_SUBTITLE  = 0xFF9CA3AF;
+    private static final int C_INPUT_BG  = 0xFF14141F;
+    private static final int C_HINT      = 0xFF6B7280;
+    private static final int C_PURPLE_A  = 0xFF8B5CF6;
+    private static final int C_PURPLE_B  = 0xFF6D28D9;
+    private static final int C_GREEN_A   = 0xFF10B981;
+    private static final int C_GREEN_B   = 0xFF059669;
+    private static final int C_JOIN_BRD  = 0xFF7C3AED;
+    private static final int C_WHITE     = 0xFFFFFFFF;
 
-    // 💬 JOIN US channel
-    public static final String join_us_channel_link = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
-
-    // 🎁 GET KEY — APK khud ?device_id= lagayega
-    public static final String get_key_link = "https://animezone-premiums.gt.tc/api/generate.php";
-
-    // 🔄 UPDATE JSON
-    public static final String put_your_json_link = "https://animezone-premiums.gt.tc/update.json";
-
-    // ⬇️ UPDATE button link
-    public static final String your_update_link = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
-
-    // 🔑 VERIFY endpoint
-    public static final String your_api_url = "https://animezone-premiums.gt.tc/api/verify.php";
-
-    // 🏷️ Asset filename for logo (APK ke assets/ folder mein rakhna)
-    public static final String LOGO_ASSET_NAME = "logo.png";
-
-    // 📱 App version
-    public static final int CURRENT_VERSION = 1;
-
-    // ═══════════════════════════════════════════════════
-
-    private static final String PREF_NAME = "gojo_mods_prefs";
-    private static final String PREF_KEY  = "saved_key";
-
-    private final Context ctx;
-    private final ExecutorService executor;
-    private final Handler ui;
+    private static final Handler UI  = new Handler(Looper.getMainLooper());
+    private static final ExecutorService POOL = Executors.newFixedThreadPool(3);
 
     public interface Callback {
         void onSuccess();
         void onFail(String msg);
     }
 
-    public WhateverMods(Context c) {
-        this.ctx = c.getApplicationContext();
-        this.executor = Executors.newSingleThreadExecutor();
-        this.ui = new Handler(Looper.getMainLooper());
-    }
-
+    // ==========================================================
+    // ENTRY POINT
+    // ==========================================================
     public static void inject(final Activity act) {
         if (act == null) return;
-        final WhateverMods sdk = new WhateverMods(act);
-
-        String savedKey = act.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getString(PREF_KEY, null);
-
-        if (savedKey != null && !savedKey.isEmpty()) {
-            sdk.verifyKey(act, savedKey, new Callback() {
-                @Override public void onSuccess() {
-                    Log.d(TAG, "Saved key OK");
-                    sdk.checkUpdate(act);
-                }
-                @Override public void onFail(String msg) {
-                    Log.d(TAG, "Saved key invalid — showing dialog");
-                    sdk.showLicenseDialog(act);
-                }
-            });
-        } else {
-            sdk.showLicenseDialog(act);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════
-    // 🎨 LICENSE DIALOG
-    // ═══════════════════════════════════════════════════
-    private void showLicenseDialog(final Activity act) {
-        ui.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    ScrollView scroll = new ScrollView(act);
-                    LinearLayout root = new LinearLayout(act);
-                    root.setOrientation(LinearLayout.VERTICAL);
-                    root.setPadding(dp(22), dp(28), dp(22), dp(24));
-                    root.setGravity(Gravity.CENTER_HORIZONTAL);
-
-                    GradientDrawable bg = new GradientDrawable();
-                    bg.setColor(Color.parseColor("#0A0A14"));
-                    bg.setCornerRadius(dp(18));
-                    bg.setStroke(dp(2), Color.parseColor("#8B5CF6"));
-                    root.setBackground(bg);
-                    scroll.addView(root);
-
-                    // ─── CIRCLE LOGO (from assets) ───
-                    ImageView logo = new ImageView(act);
-                    int size = dp(80);
-                    LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(size, size);
-                    logoParams.bottomMargin = dp(14);
-                    logo.setLayoutParams(logoParams);
-
-                    boolean hasImage = false;
-                    try {
-                        AssetManager am = act.getAssets();
-                        InputStream is = am.open(LOGO_ASSET_NAME);
-                        Bitmap bmp = BitmapFactory.decodeStream(is);
-                        is.close();
-                        if (bmp != null) {
-                            Bitmap circleBmp = getCircularBitmap(bmp);
-                            if (circleBmp != null) {
-                                logo.setImageBitmap(circleBmp);
-                                hasImage = true;
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.d(TAG, "logo asset not found, using fallback: " + e.getMessage());
-                    }
-
-                    if (!hasImage) {
-                        GradientDrawable circle = new GradientDrawable();
-                        circle.setShape(GradientDrawable.OVAL);
-                        circle.setColor(Color.parseColor("#8B5CF6"));
-                        logo.setBackground(circle);
-                    }
-                    root.addView(logo);
-
-                    // ─── TITLE ───
-                    TextView title = new TextView(act);
-                    title.setText(your_dialog_name);
-                    title.setTextColor(Color.parseColor("#C4B5FD"));
-                    title.setTextSize(20);
-                    title.setTypeface(null, Typeface.BOLD);
-                    title.setGravity(Gravity.CENTER);
-                    root.addView(title);
-
-                    // ─── SUBTITLE ───
-                    TextView sub = new TextView(act);
-                    sub.setText("Premium Unlocked Version");
-                    sub.setTextColor(Color.parseColor("#9CA3AF"));
-                    sub.setTextSize(12);
-                    sub.setGravity(Gravity.CENTER);
-                    sub.setPadding(0, dp(4), 0, dp(20));
-                    root.addView(sub);
-
-                    // ─── INPUT FIELD ───
-                    final EditText input = new EditText(act);
-                    input.setHint("GOJO-XXXXXXXX");
-                    input.setHintTextColor(Color.parseColor("#6B7280"));
-                    input.setTextColor(Color.WHITE);
-                    input.setTextSize(15);
-                    input.setGravity(Gravity.CENTER);
-                    input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-                    input.setPadding(dp(14), dp(14), dp(14), dp(14));
-                    GradientDrawable inputBg = new GradientDrawable();
-                    inputBg.setColor(Color.parseColor("#14141F"));
-                    inputBg.setCornerRadius(dp(10));
-                    inputBg.setStroke(dp(1), Color.parseColor("#4C1D95"));
-                    input.setBackground(inputBg);
-                    LinearLayout.LayoutParams inp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    inp.bottomMargin = dp(12);
-                    input.setLayoutParams(inp);
-                    root.addView(input);
-
-                    // ─── VERIFY BUTTON (purple) ───
-                    final Button login = new Button(act);
-                    login.setText("🔓  VERIFY");
-                    login.setTextColor(Color.WHITE);
-                    login.setTextSize(15);
-                    login.setTypeface(null, Typeface.BOLD);
-                    GradientDrawable btnBg = new GradientDrawable(
-                            GradientDrawable.Orientation.LEFT_RIGHT,
-                            new int[]{Color.parseColor("#8B5CF6"), Color.parseColor("#6D28D9")});
-                    btnBg.setCornerRadius(dp(10));
-                    login.setBackground(btnBg);
-                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
-                    lp.bottomMargin = dp(10);
-                    login.setLayoutParams(lp);
-                    root.addView(login);
-
-                    // ─── GET KEY BUTTON (green) ───
-                    Button getKey = new Button(act);
-                    getKey.setText("🎁  GET KEY");
-                    getKey.setTextColor(Color.WHITE);
-                    getKey.setTextSize(15);
-                    getKey.setTypeface(null, Typeface.BOLD);
-                    GradientDrawable gkBg = new GradientDrawable(
-                            GradientDrawable.Orientation.LEFT_RIGHT,
-                            new int[]{Color.parseColor("#10B981"), Color.parseColor("#059669")});
-                    gkBg.setCornerRadius(dp(10));
-                    getKey.setBackground(gkBg);
-                    LinearLayout.LayoutParams gkp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
-                    gkp.bottomMargin = dp(10);
-                    getKey.setLayoutParams(gkp);
-                    root.addView(getKey);
-
-                    // ─── JOIN US BUTTON (outline) ───
-                    Button join = new Button(act);
-                    join.setText("💬  JOIN US");
-                    join.setTextColor(Color.parseColor("#A78BFA"));
-                    join.setTextSize(14);
-                    GradientDrawable jn = new GradientDrawable();
-                    jn.setColor(Color.parseColor("#1A1A2E"));
-                    jn.setCornerRadius(dp(10));
-                    jn.setStroke(dp(1), Color.parseColor("#7C3AED"));
-                    join.setBackground(jn);
-                    LinearLayout.LayoutParams lp3 = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
-                    join.setLayoutParams(lp3);
-                    root.addView(join);
-
-                    // ─── FOOTER ───
-                    TextView footer = new TextView(act);
-                    footer.setText("Powered by " + your_dialog_name);
-                    footer.setTextColor(Color.parseColor("#4B5563"));
-                    footer.setTextSize(10);
-                    footer.setGravity(Gravity.CENTER);
-                    footer.setPadding(0, dp(16), 0, 0);
-                    root.addView(footer);
-
-                    final AlertDialog dlg = new AlertDialog.Builder(act)
-                            .setView(scroll)
-                            .setCancelable(false)
-                            .create();
-
-                    // ═══ VERIFY CLICK ═══
-                    login.setOnClickListener(new View.OnClickListener() {
-                        @Override public void onClick(View v) {
-                            final String key = input.getText().toString().trim();
-                            if (key.isEmpty()) { toast("Enter your key"); return; }
-                            login.setEnabled(false);
-                            login.setText("Verifying...");
-
-                            verifyKey(act, key, new Callback() {
-                                @Override public void onSuccess() {
-                                    ui.post(new Runnable() {
-                                        @Override public void run() {
-                                            act.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                                                    .edit().putString(PREF_KEY, key).apply();
-                                            dlg.dismiss();
-                                            toast("✓ Access Granted! Enjoy.");
-                                            checkUpdate(act);
-                                        }
-                                    });
+        try {
+            final SharedPreferences prefs = act.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            final String saved = prefs.getString(KEY_SAVED, null);
+            if (saved != null && saved.length() > 0) {
+                // Silent verify
+                POOL.execute(new Runnable() {
+                    @Override public void run() {
+                        final String deviceId = getDeviceId(act);
+                        final String status = verifyKey(saved, deviceId);
+                        if ("ACTIVE".equals(status)) {
+                            UI.post(new Runnable() {
+                                @Override public void run() {
+                                    try { checkUpdate(act); } catch (Throwable t) { Log.e(TAG, "upd", t); }
                                 }
-                                @Override public void onFail(final String msg) {
-                                    ui.post(new Runnable() {
-                                        @Override public void run() {
-                                            login.setEnabled(true);
-                                            login.setText("🔓  VERIFY");
-                                            toast("✗ " + msg);
-                                        }
-                                    });
+                            });
+                        } else {
+                            UI.post(new Runnable() {
+                                @Override public void run() {
+                                    try { showDialog(act, prefs); } catch (Throwable t) { Log.e(TAG, "dlg", t); }
                                 }
                             });
                         }
-                    });
-
-                    // ═══ GET KEY CLICK — device_id auto append ═══
-                    getKey.setOnClickListener(new View.OnClickListener() {
-                        @Override public void onClick(View v) {
-                            String devId = deviceId(act);
-                            String url = get_key_link;
-                            if (url.contains("?")) {
-                                url += "&device_id=" + Uri.encode(devId);
-                            } else {
-                                url += "?device_id=" + Uri.encode(devId);
-                            }
-                            openUrl(act, url);
-                        }
-                    });
-
-                    // ═══ JOIN US CLICK ═══
-                    join.setOnClickListener(new View.OnClickListener() {
-                        @Override public void onClick(View v) {
-                            openUrl(act, join_us_channel_link);
-                        }
-                    });
-
-                    dlg.show();
-                } catch (Exception e) {
-                    Log.e(TAG, "dialog error", e);
-                }
+                    }
+                });
+            } else {
+                showDialog(act, prefs);
             }
-        });
+        } catch (Throwable t) {
+            Log.e(TAG, "inject failed", t);
+        }
     }
 
-    // ═══════════════════════════════════════════════════
-    // 🔍 VERIFY KEY
-    // ═══════════════════════════════════════════════════
-    private void verifyKey(final Activity act, final String key, final Callback cb) {
-        executor.execute(new Runnable() {
-            @Override public void run() {
-                HttpURLConnection conn = null;
-                try {
-                    URL url = new URL(your_api_url);
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("Content-Type", "application/json");
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36");
-                    conn.setRequestProperty("Accept", "application/json");
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(15000);
-
-                    JSONObject body = new JSONObject();
-                    body.put("key", key);
-                    body.put("device_id", deviceId(act));
-
-                    OutputStream os = conn.getOutputStream();
-                    os.write(body.toString().getBytes("UTF-8"));
-                    os.close();
-
-                    int code = conn.getResponseCode();
-                    if (code != 200) { cb.onFail("Server error: " + code); return; }
-
-                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = br.readLine()) != null) sb.append(line);
-                    br.close();
-
-                    JSONObject resp = new JSONObject(sb.toString());
-                    String status = resp.optString("status", "");
-
-                    if ("ACTIVE".equals(status)) cb.onSuccess();
-                    else cb.onFail(resp.optString("message", "Invalid or Expired Key!"));
-
-                } catch (Exception e) {
-                    Log.e(TAG, "verify error", e);
-                    cb.onFail("Connection failed");
-                } finally {
-                    if (conn != null) conn.disconnect();
-                }
-            }
-        });
+    // ==========================================================
+    // DEVICE ID
+    // ==========================================================
+    private static String getDeviceId(Context ctx) {
+        try {
+            String id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
+            if (id == null) id = "unknown";
+            return id;
+        } catch (Throwable t) {
+            return "unknown";
+        }
     }
 
-    // ═══════════════════════════════════════════════════
-    // 🔄 UPDATE CHECK
-    // ═══════════════════════════════════════════════════
-    private void checkUpdate(final Activity act) {
-        executor.execute(new Runnable() {
+    // ==========================================================
+    // NETWORK — VERIFY KEY
+    // ==========================================================
+    private static String verifyKey(String key, String deviceId) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(your_api_url);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("User-Agent", UA);
+            conn.setRequestProperty("Accept", "application/json");
+
+            JSONObject body = new JSONObject();
+            body.put("key", key);
+            body.put("device_id", deviceId);
+
+            OutputStream os = conn.getOutputStream();
+            os.write(body.toString().getBytes("UTF-8"));
+            os.flush();
+            os.close();
+
+            int code = conn.getResponseCode();
+            BufferedReader br;
+            if (code >= 200 && code < 300) {
+                br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+            } else {
+                br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "UTF-8"));
+            }
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            String resp = sb.toString();
+            Log.d(TAG, "verify response: " + resp);
+
+            try {
+                JSONObject json = new JSONObject(resp);
+                String status = json.optString("status", "INVALID");
+                return status;
+            } catch (Throwable t) {
+                return "INVALID";
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "verifyKey error", t);
+            return "INVALID";
+        } finally {
+            if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
+        }
+    }
+
+    private static String getVerifyMessage(String key, String deviceId) {
+        // Re-fetch to grab message. Reuses same contract. Called on fail path.
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(your_api_url);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("User-Agent", UA);
+
+            JSONObject body = new JSONObject();
+            body.put("key", key);
+            body.put("device_id", deviceId);
+
+            OutputStream os = conn.getOutputStream();
+            os.write(body.toString().getBytes("UTF-8"));
+            os.flush();
+            os.close();
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            JSONObject json = new JSONObject(sb.toString());
+            return json.optString("message", "Invalid or Expired Key!");
+        } catch (Throwable t) {
+            return "Network Error. Try again.";
+        } finally {
+            if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
+        }
+    }
+
+    // ==========================================================
+    // NETWORK — UPDATE CHECK
+    // ==========================================================
+    private static void checkUpdate(final Activity act) {
+        POOL.execute(new Runnable() {
             @Override public void run() {
                 HttpURLConnection conn = null;
                 try {
                     URL url = new URL(put_your_json_link);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36");
-                    conn.setConnectTimeout(8000);
-                    conn.setReadTimeout(8000);
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
+                    conn.setRequestProperty("User-Agent", UA);
 
-                    int code = conn.getResponseCode();
-                    if (code != 200) return;
-
-                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
                     StringBuilder sb = new StringBuilder();
                     String line;
                     while ((line = br.readLine()) != null) sb.append(line);
                     br.close();
 
-                    JSONObject resp = new JSONObject(sb.toString());
-                    boolean updateAvailable = resp.optBoolean("update_available", false);
-                    int latestVersion = resp.optInt("latest_version", CURRENT_VERSION);
-                    final String updateLink = resp.optString("update_link", your_update_link);
-                    final String updateMsg = resp.optString("update_message",
-                            "A new version is available. Please update to continue.");
+                    JSONObject json = new JSONObject(sb.toString());
+                    boolean avail = json.optBoolean("update_available", false);
+                    int latest    = json.optInt("latest_version", CURRENT_VERSION);
+                    final String link = json.optString("update_link", your_update_link);
+                    final String msg  = json.optString("update_message", "New version available");
 
-                    if (updateAvailable && latestVersion > CURRENT_VERSION) {
-                        ui.post(new Runnable() {
+                    if (avail && latest > CURRENT_VERSION) {
+                        UI.post(new Runnable() {
                             @Override public void run() {
-                                showUpdateDialog(act, updateMsg, updateLink);
+                                try { showUpdateDialog(act, msg, link); } catch (Throwable t) { Log.e(TAG, "upddlg", t); }
                             }
                         });
                     }
-                } catch (Exception e) {
-                    Log.d(TAG, "update check skip: " + e.getMessage());
+                } catch (Throwable t) {
+                    Log.e(TAG, "checkUpdate error", t);
                 } finally {
-                    if (conn != null) conn.disconnect();
+                    if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
                 }
             }
         });
     }
 
-    private void showUpdateDialog(final Activity act, String msg, final String url) {
+    // ==========================================================
+    // UI HELPERS
+    // ==========================================================
+    private static int dp(Context c, int v) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics());
+    }
+
+    private static GradientDrawable roundedGradient(int colorA, int colorB, int radiusPx, int strokeColor, int strokePx) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{colorA, colorB});
+        g.setCornerRadius(radiusPx);
+        if (strokePx > 0) g.setStroke(strokePx, strokeColor);
+        return g;
+    }
+
+    private static GradientDrawable solidRounded(int color, int radiusPx, int strokeColor, int strokePx) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radiusPx);
+        if (strokePx > 0) g.setStroke(strokePx, strokeColor);
+        return g;
+    }
+
+    private static Bitmap circularBitmap(Bitmap src) {
+        int size = Math.min(src.getWidth(), src.getHeight());
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Rect rect = new Rect(0, 0, size, size);
+        RectF rectF = new RectF(rect);
+        paint.setAntiAlias(true);
+        canvas.drawARGB(0, 0, 0, 0);
+        paint.setColor(Color.WHITE);
+        canvas.drawOval(rectF, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(src, rect, rect, paint);
+        return out;
+    }
+
+    private static Bitmap loadLogo(Activity act) {
         try {
-            LinearLayout root = new LinearLayout(act);
-            root.setOrientation(LinearLayout.VERTICAL);
-            root.setPadding(dp(22), dp(24), dp(22), dp(24));
-            root.setGravity(Gravity.CENTER_HORIZONTAL);
+            java.io.InputStream is = act.getAssets().open(LOGO_ASSET_NAME);
+            Bitmap raw = BitmapFactory.decodeStream(is);
+            is.close();
+            if (raw == null) return null;
+            return circularBitmap(raw);
+        } catch (Throwable t) {
+            Log.e(TAG, "logo missing → purple fallback", t);
+            return null;
+        }
+    }
 
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(Color.parseColor("#0A0A14"));
-            bg.setCornerRadius(dp(18));
-            bg.setStroke(dp(2), Color.parseColor("#10B981"));
-            root.setBackground(bg);
+    private static View purpleCircleFallback(Context c, int sizePx) {
+        FrameLayout wrap = new FrameLayout(c);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sizePx, sizePx);
+        wrap.setLayoutParams(lp);
 
-            TextView t = new TextView(act);
-            t.setText("🚀 Update Available");
-            t.setTextColor(Color.parseColor("#34D399"));
-            t.setTextSize(20);
-            t.setTypeface(null, Typeface.BOLD);
-            t.setGravity(Gravity.CENTER);
-            root.addView(t);
+        View circle = new View(c);
+        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(sizePx, sizePx);
+        circle.setLayoutParams(cp);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(C_BORDER);
+        circle.setBackground(g);
+        wrap.addView(circle);
+        return wrap;
+    }
 
-            TextView m = new TextView(act);
-            m.setText(msg);
-            m.setTextColor(Color.parseColor("#9CA3AF"));
-            m.setTextSize(13);
-            m.setGravity(Gravity.CENTER);
-            m.setPadding(0, dp(12), 0, dp(20));
-            root.addView(m);
+    private static LinearLayout.LayoutParams lpMatch(int bottomMarginPx) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = bottomMarginPx;
+        return lp;
+    }
 
-            Button update = new Button(act);
-            update.setText("⬇️  UPDATE NOW");
-            update.setTextColor(Color.WHITE);
-            update.setTypeface(null, Typeface.BOLD);
-            GradientDrawable ub = new GradientDrawable(
-                    GradientDrawable.Orientation.LEFT_RIGHT,
-                    new int[]{Color.parseColor("#10B981"), Color.parseColor("#059669")});
-            ub.setCornerRadius(dp(10));
-            update.setBackground(ub);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
-            update.setLayoutParams(lp);
-            root.addView(update);
+    // ==========================================================
+    // MAIN DIALOG
+    // ==========================================================
+    private static void showDialog(final Activity act, final SharedPreferences prefs) {
+        try {
+            final int radius  = dp(act, 18);
+            final int pad     = dp(act, 20);
+            final int stroke  = dp(act, 2);
+            final int btnH    = dp(act, 48);
 
-            Button later = new Button(act);
-            later.setText("Later");
-            later.setTextColor(Color.parseColor("#9CA3AF"));
-            later.setBackgroundColor(Color.TRANSPARENT);
-            root.addView(later);
+            // ROOT (outer padding so card doesn't touch screen edges)
+            FrameLayout root = new FrameLayout(act);
+            root.setPadding(dp(act, 16), dp(act, 16), dp(act, 16), dp(act, 16));
+
+            // CARD
+            LinearLayout card = new LinearLayout(act);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(pad, pad, pad, pad);
+            card.setBackground(roundedGradient(C_BG, C_BG, radius, C_BORDER, stroke));
+
+            // 1. LOGO
+            Bitmap logo = loadLogo(act);
+            int logoSize = dp(act, 88);
+            if (logo != null) {
+                ImageView iv = new ImageView(act);
+                LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(logoSize, logoSize);
+                ilp.gravity = Gravity.CENTER_HORIZONTAL;
+                ilp.bottomMargin = dp(act, 12);
+                iv.setLayoutParams(ilp);
+                iv.setImageBitmap(logo);
+                card.addView(iv);
+            } else {
+                View circle = purpleCircleFallback(act, logoSize);
+                LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(logoSize, logoSize);
+                ilp.gravity = Gravity.CENTER_HORIZONTAL;
+                ilp.bottomMargin = dp(act, 12);
+                circle.setLayoutParams(ilp);
+                card.addView(circle);
+            }
+
+            // 2. TITLE
+            TextView title = new TextView(act);
+            title.setText(your_dialog_name);
+            title.setTextColor(C_TITLE);
+            title.setTextSize(20f);
+            title.setGravity(Gravity.CENTER);
+            title.setTypeface(null, android.graphics.Typeface.BOLD);
+            title.setLayoutParams(lpMatch(dp(act, 4)));
+            card.addView(title);
+
+            // 3. SUBTITLE
+            TextView sub = new TextView(act);
+            sub.setText("Premium Unlocked Version");
+            sub.setTextColor(C_SUBTITLE);
+            sub.setTextSize(13f);
+            sub.setGravity(Gravity.CENTER);
+            sub.setLayoutParams(lpMatch(dp(act, 18)));
+            card.addView(sub);
+
+            // 4. INPUT
+            final EditText input = new EditText(act);
+            input.setHint("GOJO-XXXXXXXX");
+            input.setHintTextColor(C_HINT);
+            input.setTextColor(C_WHITE);
+            input.setTextSize(15f);
+            input.setSingleLine(true);
+            input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+            input.setPadding(dp(act, 14), dp(act, 12), dp(act, 14), dp(act, 12));
+            input.setBackground(solidRounded(C_INPUT_BG, dp(act, 10), C_BORDER, dp(act, 1)));
+            LinearLayout.LayoutParams inLp = lpMatch(dp(act, 14));
+            inLp.height = dp(act, 48);
+            input.setLayoutParams(inLp);
+            card.addView(input);
+
+            // 5. VERIFY BUTTON
+            final TextView verify = new TextView(act);
+            verify.setText("VERIFY");
+            verify.setTextColor(C_WHITE);
+            verify.setTextSize(15f);
+            verify.setGravity(Gravity.CENTER);
+            verify.setTypeface(null, android.graphics.Typeface.BOLD);
+            verify.setBackground(roundedGradient(C_PURPLE_A, C_PURPLE_B, dp(act, 10), 0, 0));
+            LinearLayout.LayoutParams vLp = lpMatch(dp(act, 10));
+            vLp.height = btnH;
+            verify.setLayoutParams(vLp);
+            card.addView(verify);
+
+            // 6. GET KEY BUTTON
+            TextView getKey = new TextView(act);
+            getKey.setText("GET KEY");
+            getKey.setTextColor(C_WHITE);
+            getKey.setTextSize(15f);
+            getKey.setGravity(Gravity.CENTER);
+            getKey.setTypeface(null, android.graphics.Typeface.BOLD);
+            getKey.setBackground(roundedGradient(C_GREEN_A, C_GREEN_B, dp(act, 10), 0, 0));
+            LinearLayout.LayoutParams gLp = lpMatch(dp(act, 10));
+            gLp.height = btnH;
+            getKey.setLayoutParams(gLp);
+            card.addView(getKey);
+
+            // 7. JOIN US BUTTON
+            TextView join = new TextView(act);
+            join.setText("JOIN US");
+            join.setTextColor(C_TITLE);
+            join.setTextSize(15f);
+            join.setGravity(Gravity.CENTER);
+            join.setTypeface(null, android.graphics.Typeface.BOLD);
+            join.setBackground(solidRounded(C_BG, dp(act, 10), C_JOIN_BRD, dp(act, 2)));
+            LinearLayout.LayoutParams jLp = lpMatch(dp(act, 14));
+            jLp.height = btnH;
+            join.setLayoutParams(jLp);
+            card.addView(join);
+
+            // 8. FOOTER
+            TextView footer = new TextView(act);
+            footer.setText("Powered by " + your_dialog_name);
+            footer.setTextColor(C_SUBTITLE);
+            footer.setTextSize(11f);
+            footer.setGravity(Gravity.CENTER);
+            card.addView(footer);
+
+            // Wrap card in scroll for tiny screens
+            ScrollView sv = new ScrollView(act);
+            sv.addView(card);
+            root.addView(sv);
 
             final AlertDialog dlg = new AlertDialog.Builder(act)
                     .setView(root)
                     .setCancelable(false)
                     .create();
 
-            update.setOnClickListener(new View.OnClickListener() {
+            Window w = dlg.getWindow();
+            if (w != null) {
+                w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+                w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+            }
+
+            // VERIFY CLICK
+            verify.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
-                    openUrl(act, url);
-                    dlg.dismiss();
+                    final String key = input.getText().toString().trim().toUpperCase();
+                    if (key.length() < 4) {
+                        Toast.makeText(act, "Enter a valid key", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    verify.setEnabled(false);
+                    verify.setText("VERIFYING...");
+
+                    POOL.execute(new Runnable() {
+                        @Override public void run() {
+                            final String deviceId = getDeviceId(act);
+                            final String status   = verifyKey(key, deviceId);
+                            final String msg      = "ACTIVE".equals(status)
+                                    ? "✓ Access Granted! Enjoy."
+                                    : getVerifyMessage(key, deviceId);
+
+                            UI.post(new Runnable() {
+                                @Override public void run() {
+                                    try {
+                                        if ("ACTIVE".equals(status)) {
+                                            prefs.edit().putString(KEY_SAVED, key).apply();
+                                            Toast.makeText(act, msg, Toast.LENGTH_LONG).show();
+                                            try { dlg.dismiss(); } catch (Throwable ignored) {}
+                                            checkUpdate(act);
+                                        } else {
+                                            verify.setEnabled(true);
+                                            verify.setText("VERIFY");
+                                            Toast.makeText(act, msg, Toast.LENGTH_LONG).show();
+                                        }
+                                    } catch (Throwable t) {
+                                        Log.e(TAG, "verify ui", t);
+                                    }
+                                }
+                            });
+                        }
+                    });
                 }
             });
-            later.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { dlg.dismiss(); }
+
+            // GET KEY CLICK
+            getKey.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try {
+                        String deviceId = getDeviceId(act);
+                        String url = get_key_link;
+                        if (url.contains("?")) url += "&device_id=" + deviceId;
+                        else                  url += "?device_id=" + deviceId;
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        act.startActivity(i);
+                    } catch (Throwable t) {
+                        Log.e(TAG, "getkey", t);
+                        Toast.makeText(act, "Cannot open browser", Toast.LENGTH_SHORT).show();
+                    }
+                }
             });
+
+            // JOIN US CLICK
+            join.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(join_us_channel_link));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        act.startActivity(i);
+                    } catch (Throwable t) {
+                        Log.e(TAG, "join", t);
+                        Toast.makeText(act, "Cannot open browser", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+
             dlg.show();
-        } catch (Exception e) {
-            Log.e(TAG, "update dialog error", e);
+        } catch (Throwable t) {
+            Log.e(TAG, "showDialog failed", t);
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    // 🎨 CIRCULAR BITMAP
-    // ═══════════════════════════════════════════════════
-    private Bitmap getCircularBitmap(Bitmap bitmap) {
+    // ==========================================================
+    // UPDATE DIALOG
+    // ==========================================================
+    private static void showUpdateDialog(final Activity act, String message, final String updateLink) {
         try {
-            int size = Math.min(bitmap.getWidth(), bitmap.getHeight());
-            Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            LinearLayout card = new LinearLayout(act);
+            card.setOrientation(LinearLayout.VERTICAL);
+            int pad = dp(act, 20);
+            card.setPadding(pad, pad, pad, pad);
+            card.setBackground(roundedGradient(C_BG, C_BG, dp(act, 18), C_BORDER, dp(act, 2)));
 
-            Canvas canvas = new Canvas(output);
-            final Paint paint = new Paint();
-            final Rect rect = new Rect(0, 0, size, size);
-            final RectF rectF = new RectF(rect);
+            TextView t = new TextView(act);
+            t.setText("🚀 Update Available");
+            t.setTextColor(C_TITLE);
+            t.setTextSize(18f);
+            t.setGravity(Gravity.CENTER);
+            t.setTypeface(null, android.graphics.Typeface.BOLD);
+            t.setLayoutParams(lpMatch(dp(act, 10)));
+            card.addView(t);
 
-            paint.setAntiAlias(true);
-            canvas.drawARGB(0, 0, 0, 0);
-            paint.setColor(Color.WHITE);
-            canvas.drawOval(rectF, paint);
+            TextView m = new TextView(act);
+            m.setText(message);
+            m.setTextColor(C_SUBTITLE);
+            m.setTextSize(13f);
+            m.setGravity(Gravity.CENTER);
+            m.setLayoutParams(lpMatch(dp(act, 16)));
+            card.addView(m);
 
-            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+            TextView updateBtn = new TextView(act);
+            updateBtn.setText("UPDATE NOW");
+            updateBtn.setTextColor(C_WHITE);
+            updateBtn.setTextSize(15f);
+            updateBtn.setGravity(Gravity.CENTER);
+            updateBtn.setTypeface(null, android.graphics.Typeface.BOLD);
+            updateBtn.setBackground(roundedGradient(C_PURPLE_A, C_PURPLE_B, dp(act, 10), 0, 0));
+            LinearLayout.LayoutParams uLp = lpMatch(dp(act, 10));
+            uLp.height = dp(act, 48);
+            updateBtn.setLayoutParams(uLp);
+            card.addView(updateBtn);
 
-            int left = (bitmap.getWidth() - size) / 2;
-            int top = (bitmap.getHeight() - size) / 2;
-            Rect srcRect = new Rect(left, top, left + size, top + size);
-            canvas.drawBitmap(bitmap, srcRect, rect, paint);
+            TextView laterBtn = new TextView(act);
+            laterBtn.setText("Later");
+            laterBtn.setTextColor(C_SUBTITLE);
+            laterBtn.setTextSize(14f);
+            laterBtn.setGravity(Gravity.CENTER);
+            laterBtn.setBackground(solidRounded(C_BG, dp(act, 10), C_JOIN_BRD, dp(act, 2)));
+            LinearLayout.LayoutParams lLp = lpMatch(0);
+            lLp.height = dp(act, 44);
+            laterBtn.setLayoutParams(lLp);
+            card.addView(laterBtn);
 
-            return output;
-        } catch (Exception e) {
-            Log.e(TAG, "circle bitmap error: " + e);
-            return bitmap;
-        }
-    }
+            FrameLayout root = new FrameLayout(act);
+            root.setPadding(dp(act, 16), dp(act, 16), dp(act, 16), dp(act, 16));
+            root.addView(card);
 
-    // ═══════════════════════════════════════════════════
-    // 🛠️ HELPERS
-    // ═══════════════════════════════════════════════════
-    private void openUrl(Activity act, String url) {
-        try {
-            act.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-        } catch (Exception e) { toast("Cannot open link"); }
-    }
+            final AlertDialog dlg = new AlertDialog.Builder(act)
+                    .setView(root)
+                    .setCancelable(false)
+                    .create();
 
-    private String deviceId(Context c) {
-        try {
-            return Settings.Secure.getString(c.getContentResolver(), Settings.Secure.ANDROID_ID);
-        } catch (Exception e) { return "unknown"; }
-    }
-
-    private void toast(final String m) {
-        ui.post(new Runnable() {
-            @Override public void run() {
-                Toast.makeText(ctx, m, Toast.LENGTH_LONG).show();
+            Window w = dlg.getWindow();
+            if (w != null) {
+                w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
             }
-        });
-    }
 
-    private int dp(int v) {
-        return (int) (v * ctx.getResources().getDisplayMetrics().density);
+            updateBtn.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(updateLink));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        act.startActivity(i);
+                    } catch (Throwable t) {
+                        Log.e(TAG, "updlink", t);
+                    }
+                }
+            });
+
+            laterBtn.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try { dlg.dismiss(); } catch (Throwable ignored) {}
+                }
+            });
+
+            dlg.show();
+        } catch (Throwable t) {
+            Log.e(TAG, "showUpdateDialog failed", t);
+        }
     }
 }
