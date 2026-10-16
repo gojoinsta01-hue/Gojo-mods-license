@@ -1,4 +1,4 @@
-name: Build Whatever Mods DEX
+name: Build Gojo Satoru Mods DEX
 
 on:
   push:
@@ -44,6 +44,6 @@ jobs:
       - name: Upload DEX
         uses: actions/upload-artifact@v4
         with:
-          name: whatever-mods-dex
+          name: gojo-mods-dex
           path: build/classes.dex
           retention-days: 90
