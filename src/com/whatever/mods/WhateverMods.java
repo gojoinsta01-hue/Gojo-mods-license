@@ -51,17 +51,25 @@ public class WhateverMods {
     // OPEN STRINGS
     // ==========================================================
     private static final String DIALOG_NAME = "..ᴳᵒʲᵒメsᴀᴛᴏʀᴜシ Mods";
-    private static final String GET_KEY_URL = "https://animezone-premiums.gt.tc/api/generate.php";
+    
+    // GET KEY (Yahan apni generate.php ka link daal lena baad mein)
+    private static final String GET_KEY_URL = "https://wa.me/923000000000?text=Give%20me%20Gojo%20Mods%20key%20for%20device:%20"; 
+    
     private static final String JOIN_URL    = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
     private static final String UPDATE_LINK = "https://animezone-premiums.gt.tc/update"; 
     
     // ==========================================================
     // ENCRYPTED URLS (Base64 + XOR 0x5A)
     // ==========================================================
-    // https://animezone-premiums.gt.tc/api/verify.php
+    
+    // 1. VERIFY URL (Tera Supabase link)
+    // Plain: https://wdrksxlolrdtihopwojn.supabase.co/functions/v1/license
     private static final String ENC_API     = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // https://animezone-premiums.gt.tc/update.json
+    
+    // 2. UPDATE JSON URL (Teri website)
+    // Plain: https://animezone-premiums.gt.tc/update.json
     private static final String ENC_UPDJSON = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
+    
     private static final byte XOR_KEY = 0x5A;
 
     public static final String LOGO_ASSET_NAME = "logo.png";
@@ -174,7 +182,7 @@ public class WhateverMods {
     }
 
     // ==========================================================
-    // VERIFY (No JSON lib, manual string check)
+    // VERIFY (Supabase POST)
     // ==========================================================
     private static String verifyKey(String key, String deviceId) {
         HttpURLConnection conn = null;
@@ -189,8 +197,8 @@ public class WhateverMods {
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setRequestProperty("User-Agent", UA);
 
-            // Manual JSON string
-            String body = "{\"key\":\"" + key + "\",\"device_id\":\"" + deviceId + "\",\"client\":\"whatever_client\"}";
+            // Teri curl command ke mutabiq
+            String body = "{\"key\":\"" + key + "\",\"device_id\":\"" + deviceId + "\"}";
             OutputStream os = conn.getOutputStream();
             os.write(body.getBytes("UTF-8"));
             os.flush();
@@ -209,7 +217,7 @@ public class WhateverMods {
                 String resp = sb.toString().trim();
                 Log.d(TAG, "verify response: " + resp);
 
-                // MANUAL CHECK: No JSON parser to crash
+                // No JSON parser to crash
                 if (resp.contains("\"status\":\"ACTIVE\"") || resp.contains("\"status\": \"ACTIVE\"")) {
                     return "ACTIVE";
                 } else if (resp.contains("\"status\":\"EXPIRED\"") || resp.contains("\"status\": \"EXPIRED\"")) {
@@ -253,17 +261,14 @@ public class WhateverMods {
                     String raw = sb.toString().trim();
                     Log.d(TAG, "update raw: " + raw);
                     
-                    // If the server returns HTML, just skip
                     if (!raw.contains("{")) return;
 
-                    // Simple hacky parse without org.json
-                    final String msg = "New version available";
                     boolean avail = raw.contains("\"update_available\":true") || raw.contains("\"update_available\": true");
                     
                     if (avail) {
                         UI.post(new Runnable() {
                             @Override public void run() {
-                                try { showUpdateDialog(act, msg, UPDATE_LINK); } catch (Throwable t) {}
+                                try { showUpdateDialog(act, "New version available", UPDATE_LINK); } catch (Throwable t) {}
                             }
                         });
                     }
@@ -521,9 +526,7 @@ public class WhateverMods {
                 @Override public void onClick(View v) {
                     try {
                         String deviceId = getDeviceId(act);
-                        String url = GET_KEY_URL;
-                        if (url.contains("?")) url += "&device_id=" + deviceId;
-                        else                  url += "?device_id=" + deviceId;
+                        String url = GET_KEY_URL + deviceId;
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         act.startActivity(i);
