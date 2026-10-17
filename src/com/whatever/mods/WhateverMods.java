@@ -37,8 +37,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -50,24 +48,21 @@ import java.util.concurrent.Executors;
 public class WhateverMods {
 
     // ==========================================================
-    // ENCRYPTED STRINGS — Base64 + XOR key
-    // To change: decode base64, XOR each byte with XOR_KEY, you get plain string
-    // Or just edit the smali const-string values directly in MT Manager
+    // OPEN STRINGS
     // ==========================================================
-    private static final byte XOR_KEY = 0x5A;
-
-    // "https://animezone-premiums.gt.tc/api/verify.php"
+    private static final String DIALOG_NAME = "..ᴳᵒʲᵒメsᴀᴛᴏʀᴜシ Mods";
+    private static final String GET_KEY_URL = "https://animezone-premiums.gt.tc/api/generate.php";
+    private static final String JOIN_URL    = "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E";
+    private static final String UPDATE_LINK = "https://animezone-premiums.gt.tc/update"; 
+    
+    // ==========================================================
+    // ENCRYPTED URLS (Base64 + XOR 0x5A)
+    // ==========================================================
+    // https://animezone-premiums.gt.tc/api/verify.php
     private static final String ENC_API     = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // "https://animezone-premiums.gt.tc/api/generate.php"
-    private static final String ENC_GETKEY  = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // "https://animezone-premiums.gt.tc/update.json"
+    // https://animezone-premiums.gt.tc/update.json
     private static final String ENC_UPDJSON = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // "https://animezone-premiums.gt.tc/update"
-    private static final String ENC_UPDLINK = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // "https://whatsapp.com/channel/0029Vb9T2AJGJP8KUTmkz80E"
-    private static final String ENC_JOIN    = "dT1SBFc9DBR/ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
-    // "..ᴳᵒʲᵒメsᴀᴛᴏʀᴜシ Mods"
-    private static final String ENC_NAME    = "fjc2Bgc4ORR9ZDV0EC12NkZ9biI2DxJxKkBPFTQhXhc9NQwbbWcmQht1OR99KSUxSUp/PkAKMWMnEFooJRVjZjQ/CVohIXR7NTVhWn9zLFYUMGBXVS9zMUhqNGMPVHgmSWt9LRIIEzUlBUt9eQQEbTQ2RWpqOR1qKjEQ";
+    private static final byte XOR_KEY = 0x5A;
 
     public static final String LOGO_ASSET_NAME = "logo.png";
     public static final int    CURRENT_VERSION = 1;
@@ -99,48 +94,36 @@ public class WhateverMods {
         void onFail(String msg);
     }
 
-    // ==========================================================
-    // DECRYPT HELPER — Base64 decode + XOR
-    // ==========================================================
     private static String dec(String enc) {
         try {
             byte[] raw = Base64.decode(enc, Base64.DEFAULT);
             for (int i = 0; i < raw.length; i++) raw[i] = (byte) (raw[i] ^ XOR_KEY);
             return new String(raw, "UTF-8");
         } catch (Throwable t) {
-            Log.e(TAG, "dec fail", t);
             return "";
         }
     }
 
-    // ==========================================================
-    // DEVICE ID — uninstall-safe (ANDROID_ID + Build fallback)
-    // ==========================================================
     private static String getDeviceId(Context ctx) {
         try {
             SharedPreferences p = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             String locked = p.getString(KEY_DEVICE, null);
             if (locked != null && locked.length() > 8) return locked;
 
-            // Primary: ANDROID_ID (survives uninstall on most devices, changes on factory reset)
             String androidId = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
             if (androidId == null || androidId.length() < 8) androidId = "";
 
-            // Fallback combine: Build.SERIAL + MODEL + BRAND + ANDROID_ID
             String serial = "";
             try { serial = Build.SERIAL; } catch (Throwable ignored) {}
             if (serial == null || serial.equals(Build.UNKNOWN)) serial = "";
 
             String fp = (androidId + "|" + serial + "|" + Build.MODEL + "|" + Build.BRAND + "|" + Build.DEVICE);
-
-            // Hash to fixed-length hex so it's stable & clean
             String hashed = sha256Hex(fp);
             String finalId = (androidId.length() >= 8 ? androidId : hashed.substring(0, 16));
 
             p.edit().putString(KEY_DEVICE, finalId).apply();
             return finalId;
         } catch (Throwable t) {
-            Log.e(TAG, "deviceId", t);
             return "unknown_device";
         }
     }
@@ -157,9 +140,6 @@ public class WhateverMods {
         }
     }
 
-    // ==========================================================
-    // ENTRY POINT
-    // ==========================================================
     public static void inject(final Activity act) {
         if (act == null) return;
         try {
@@ -173,13 +153,13 @@ public class WhateverMods {
                         if ("ACTIVE".equals(status)) {
                             UI.post(new Runnable() {
                                 @Override public void run() {
-                                    try { checkUpdate(act); } catch (Throwable t) { Log.e(TAG, "upd", t); }
+                                    try { checkUpdate(act); } catch (Throwable t) {}
                                 }
                             });
                         } else {
                             UI.post(new Runnable() {
                                 @Override public void run() {
-                                    try { showDialog(act, prefs); } catch (Throwable t) { Log.e(TAG, "dlg", t); }
+                                    try { showDialog(act, prefs); } catch (Throwable t) {}
                                 }
                             });
                         }
@@ -194,8 +174,7 @@ public class WhateverMods {
     }
 
     // ==========================================================
-    // VERIFY KEY — POST {"key":..., "device_id":...}
-    // Works with both PHP (verify.php) and Supabase Edge Function
+    // VERIFY (No JSON lib, manual string check)
     // ==========================================================
     private static String verifyKey(String key, String deviceId) {
         HttpURLConnection conn = null;
@@ -203,99 +182,52 @@ public class WhateverMods {
             URL url = new URL(dec(ENC_API));
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(20000);
-            conn.setReadTimeout(20000);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
             conn.setDoOutput(true);
-            conn.setDoInput(true);
             conn.setUseCaches(false);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setRequestProperty("Accept", "application/json");
             conn.setRequestProperty("User-Agent", UA);
 
-            JSONObject body = new JSONObject();
-            body.put("key", key);
-            body.put("device_id", deviceId);
-            body.put("android_id", deviceId); // compatibility with old Supabase
-            body.put("client", "whatever_client");
-
+            // Manual JSON string
+            String body = "{\"key\":\"" + key + "\",\"device_id\":\"" + deviceId + "\",\"client\":\"whatever_client\"}";
             OutputStream os = conn.getOutputStream();
-            os.write(body.toString().getBytes("UTF-8"));
+            os.write(body.getBytes("UTF-8"));
             os.flush();
             os.close();
 
             int code = conn.getResponseCode();
-            Log.d(TAG, "verify http=" + code);
+            Log.d(TAG, "verify HTTP: " + code);
 
-            BufferedReader br;
             if (code >= 200 && code < 300) {
-                br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+
+                String resp = sb.toString().trim();
+                Log.d(TAG, "verify response: " + resp);
+
+                // MANUAL CHECK: No JSON parser to crash
+                if (resp.contains("\"status\":\"ACTIVE\"") || resp.contains("\"status\": \"ACTIVE\"")) {
+                    return "ACTIVE";
+                } else if (resp.contains("\"status\":\"EXPIRED\"") || resp.contains("\"status\": \"EXPIRED\"")) {
+                    return "EXPIRED";
+                } else {
+                    return "INVALID";
+                }
             } else {
-                br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "UTF-8"));
-            }
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-            br.close();
-
-            String resp = sb.toString();
-            Log.d(TAG, "verify resp: " + resp);
-
-            try {
-                JSONObject json = new JSONObject(resp);
-                return json.optString("status", "INVALID");
-            } catch (Throwable t) {
-                return "INVALID";
+                return "SERVER_ERROR_" + code;
             }
         } catch (Throwable t) {
             Log.e(TAG, "verifyKey err", t);
-            return "INVALID";
+            return "NETWORK_ERROR";
         } finally {
             if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
         }
     }
 
-    private static String getVerifyMessage(String key, String deviceId) {
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(dec(ENC_API));
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(20000);
-            conn.setReadTimeout(20000);
-            conn.setDoOutput(true);
-            conn.setUseCaches(false);
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setRequestProperty("User-Agent", UA);
-
-            JSONObject body = new JSONObject();
-            body.put("key", key);
-            body.put("device_id", deviceId);
-            body.put("android_id", deviceId);
-            body.put("client", "whatever_client");
-
-            OutputStream os = conn.getOutputStream();
-            os.write(body.toString().getBytes("UTF-8"));
-            os.flush();
-            os.close();
-
-            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-            br.close();
-
-            JSONObject json = new JSONObject(sb.toString());
-            return json.optString("message", "Invalid or Expired Key!");
-        } catch (Throwable t) {
-            return "Network Error. Try again.";
-        } finally {
-            if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
-        }
-    }
-
-    // ==========================================================
-    // UPDATE CHECK
-    // ==========================================================
     private static void checkUpdate(final Activity act) {
         POOL.execute(new Runnable() {
             @Override public void run() {
@@ -304,10 +236,13 @@ public class WhateverMods {
                     URL url = new URL(dec(ENC_UPDJSON));
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(15000);
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
                     conn.setUseCaches(false);
                     conn.setRequestProperty("User-Agent", UA);
+
+                    int code = conn.getResponseCode();
+                    if (code < 200 || code >= 300) return; // Safely skip if not 200
 
                     BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
                     StringBuilder sb = new StringBuilder();
@@ -315,21 +250,25 @@ public class WhateverMods {
                     while ((line = br.readLine()) != null) sb.append(line);
                     br.close();
 
-                    JSONObject json = new JSONObject(sb.toString());
-                    boolean avail = json.optBoolean("update_available", false);
-                    int latest    = json.optInt("latest_version", CURRENT_VERSION);
-                    final String link = json.optString("update_link", dec(ENC_UPDLINK));
-                    final String msg  = json.optString("update_message", "New version available");
+                    String raw = sb.toString().trim();
+                    Log.d(TAG, "update raw: " + raw);
+                    
+                    // If the server returns HTML, just skip
+                    if (!raw.contains("{")) return;
 
-                    if (avail && latest > CURRENT_VERSION) {
+                    // Simple hacky parse without org.json
+                    final String msg = "New version available";
+                    boolean avail = raw.contains("\"update_available\":true") || raw.contains("\"update_available\": true");
+                    
+                    if (avail) {
                         UI.post(new Runnable() {
                             @Override public void run() {
-                                try { showUpdateDialog(act, msg, link); } catch (Throwable t) { Log.e(TAG, "upddlg", t); }
+                                try { showUpdateDialog(act, msg, UPDATE_LINK); } catch (Throwable t) {}
                             }
                         });
                     }
                 } catch (Throwable t) {
-                    Log.e(TAG, "checkUpdate", t);
+                    Log.e(TAG, "update failed", t);
                 } finally {
                     if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}
                 }
@@ -337,9 +276,6 @@ public class WhateverMods {
         });
     }
 
-    // ==========================================================
-    // UI HELPERS
-    // ==========================================================
     private static int dp(Context c, int v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics());
     }
@@ -383,7 +319,6 @@ public class WhateverMods {
             if (raw == null) return null;
             return circularBitmap(raw);
         } catch (Throwable t) {
-            Log.e(TAG, "logo missing", t);
             return null;
         }
     }
@@ -410,9 +345,6 @@ public class WhateverMods {
         return lp;
     }
 
-    // ==========================================================
-    // MAIN DIALOG
-    // ==========================================================
     private static void showDialog(final Activity act, final SharedPreferences prefs) {
         try {
             final int radius = dp(act, 18);
@@ -428,7 +360,6 @@ public class WhateverMods {
             card.setPadding(pad, pad, pad, pad);
             card.setBackground(roundedGradient(C_BG, C_BG, radius, C_BORDER, stroke));
 
-            // Logo
             Bitmap logo = loadLogo(act);
             int logoSize = dp(act, 88);
             if (logo != null) {
@@ -448,9 +379,8 @@ public class WhateverMods {
                 card.addView(circle);
             }
 
-            // Title
             TextView title = new TextView(act);
-            title.setText(dec(ENC_NAME));
+            title.setText(DIALOG_NAME);
             title.setTextColor(C_TITLE);
             title.setTextSize(20f);
             title.setGravity(Gravity.CENTER);
@@ -458,7 +388,6 @@ public class WhateverMods {
             title.setLayoutParams(lpMatch(dp(act, 4)));
             card.addView(title);
 
-            // Subtitle
             TextView sub = new TextView(act);
             sub.setText("Premium Unlocked Version");
             sub.setTextColor(C_SUBTITLE);
@@ -467,7 +396,6 @@ public class WhateverMods {
             sub.setLayoutParams(lpMatch(dp(act, 18)));
             card.addView(sub);
 
-            // Input
             final EditText input = new EditText(act);
             input.setHint("GOJO-XXXXXXXX");
             input.setHintTextColor(C_HINT);
@@ -482,7 +410,6 @@ public class WhateverMods {
             input.setLayoutParams(inLp);
             card.addView(input);
 
-            // VERIFY
             final TextView verify = new TextView(act);
             verify.setText("VERIFY");
             verify.setTextColor(C_WHITE);
@@ -495,7 +422,6 @@ public class WhateverMods {
             verify.setLayoutParams(vLp);
             card.addView(verify);
 
-            // GET KEY
             TextView getKey = new TextView(act);
             getKey.setText("GET KEY");
             getKey.setTextColor(C_WHITE);
@@ -508,7 +434,6 @@ public class WhateverMods {
             getKey.setLayoutParams(gLp);
             card.addView(getKey);
 
-            // JOIN
             TextView join = new TextView(act);
             join.setText("JOIN US");
             join.setTextColor(C_TITLE);
@@ -521,9 +446,8 @@ public class WhateverMods {
             join.setLayoutParams(jLp);
             card.addView(join);
 
-            // Footer
             TextView footer = new TextView(act);
-            footer.setText("Powered by " + dec(ENC_NAME));
+            footer.setText("Powered by " + DIALOG_NAME);
             footer.setTextColor(C_SUBTITLE);
             footer.setTextSize(11f);
             footer.setGravity(Gravity.CENTER);
@@ -558,9 +482,19 @@ public class WhateverMods {
                         @Override public void run() {
                             final String deviceId = getDeviceId(act);
                             final String status   = verifyKey(key, deviceId);
-                            final String msg      = "ACTIVE".equals(status)
-                                    ? "✓ Access Granted! Enjoy."
-                                    : getVerifyMessage(key, deviceId);
+                            final String msg;
+
+                            if ("ACTIVE".equals(status)) {
+                                msg = "✓ Access Granted! Enjoy.";
+                            } else if ("EXPIRED".equals(status)) {
+                                msg = "Key expired!";
+                            } else if (status.startsWith("SERVER_ERROR")) {
+                                msg = "Server error: " + status.replace("SERVER_ERROR_", "");
+                            } else if ("NETWORK_ERROR".equals(status)) {
+                                msg = "Network Error. Try again.";
+                            } else {
+                                msg = "Invalid or Expired Key!";
+                            }
 
                             UI.post(new Runnable() {
                                 @Override public void run() {
@@ -575,7 +509,7 @@ public class WhateverMods {
                                             verify.setText("VERIFY");
                                             Toast.makeText(act, msg, Toast.LENGTH_LONG).show();
                                         }
-                                    } catch (Throwable t) { Log.e(TAG, "verify ui", t); }
+                                    } catch (Throwable t) {}
                                 }
                             });
                         }
@@ -587,36 +521,28 @@ public class WhateverMods {
                 @Override public void onClick(View v) {
                     try {
                         String deviceId = getDeviceId(act);
-                        String url = dec(ENC_GETKEY);
+                        String url = GET_KEY_URL;
                         if (url.contains("?")) url += "&device_id=" + deviceId;
                         else                  url += "?device_id=" + deviceId;
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         act.startActivity(i);
-                    } catch (Throwable t) {
-                        Log.e(TAG, "getkey", t);
-                        Toast.makeText(act, "Cannot open browser", Toast.LENGTH_SHORT).show();
-                    }
+                    } catch (Throwable t) {}
                 }
             });
 
             join.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     try {
-                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(dec(ENC_JOIN)));
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(JOIN_URL));
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         act.startActivity(i);
-                    } catch (Throwable t) {
-                        Log.e(TAG, "join", t);
-                        Toast.makeText(act, "Cannot open browser", Toast.LENGTH_SHORT).show();
-                    }
+                    } catch (Throwable t) {}
                 }
             });
 
             dlg.show();
-        } catch (Throwable t) {
-            Log.e(TAG, "showDialog failed", t);
-        }
+        } catch (Throwable t) {}
     }
 
     private static void showUpdateDialog(final Activity act, String message, final String updateLink) {
@@ -687,7 +613,7 @@ public class WhateverMods {
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(updateLink));
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         act.startActivity(i);
-                    } catch (Throwable t) { Log.e(TAG, "updlink", t); }
+                    } catch (Throwable t) {}
                 }
             });
 
@@ -698,8 +624,6 @@ public class WhateverMods {
             });
 
             dlg.show();
-        } catch (Throwable t) {
-            Log.e(TAG, "showUpdateDialog failed", t);
-        }
+        } catch (Throwable t) {}
     }
 }
