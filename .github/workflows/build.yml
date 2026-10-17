@@ -40,10 +40,10 @@ jobs:
             --lib $ANDROID_HOME/platforms/android-34/android.jar \
             build/com/whatever/mods/*.class
 
-      - name: Verify dex exists
+      - name: Verify dex
         run: ls -la build/classes.dex
 
-      - name: Upload classes.dex artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: gojo-mods-dex
